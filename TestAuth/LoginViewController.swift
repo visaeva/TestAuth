@@ -7,9 +7,14 @@
 
 import UIKit
 import SafariServices
+import FirebaseAuth
+import AuthenticationServices
+import CryptoKit
 
 
 class LoginViewController: UIViewController {
+    fileprivate var currentNonce: String?
+
     
     private let welcomeLabel: UILabel = {
         let label = UILabel()
@@ -91,16 +96,28 @@ class LoginViewController: UIViewController {
     
     private let termsLabel: UILabel = {
         let label = UILabel()
-        label.text = "By continuing, you agree to Assetsy's Terms of Use and Privacy Policy"
-        label.font = .systemFont(ofSize: 11, weight: .regular)
-        label.textColor = .black
-        label.textAlignment = .center
         label.numberOfLines = 0
-        
-        
+        label.textAlignment = .center
+        label.isUserInteractionEnabled = true
         label.translatesAutoresizingMaskIntoConstraints = false
+        
+        let text = "By continuing, you agree to Assetsy's\n Terms of Use and Privacy Policy"
+        var attributed = AttributedString(text)
+        attributed.font = .systemFont(ofSize: 11, weight: .regular)
+        
+        if let termsRange = attributed.range(of: "Terms of Use") {
+            attributed[termsRange].foregroundColor = .systemBlue
+            attributed[termsRange].underlineStyle = .single
+        }
+        if let privacyRange = attributed.range(of: "Privacy Policy") {
+            attributed[privacyRange].foregroundColor = .systemBlue
+            attributed[privacyRange].underlineStyle = .single
+        }
+        
+        label.attributedText = NSAttributedString(attributed)
         return label
     }()
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -117,6 +134,10 @@ class LoginViewController: UIViewController {
         view.addSubview(termsLabel)
         
         setupConstraints()
+        setupTermsTap()
+        
+        appleButton.addTarget(self, action: #selector(handleAppleIdRequest), for: .touchUpInside)
+
     }
     
     private func setupNavigationBar() {
@@ -169,10 +190,122 @@ class LoginViewController: UIViewController {
         ])
     }
     
+    private func setupTermsTap() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(termsTapped(_:)))
+        termsLabel.addGestureRecognizer(tap)
+    }
+    
+    @objc private func termsTapped(_ gesture: UITapGestureRecognizer) {
+        guard let text = termsLabel.attributedText?.string else { return }
+        let nsText = text as NSString
+        
+        let tapLocation = gesture.location(in: termsLabel)
+        let layoutManager = NSLayoutManager()
+        let textContainer = NSTextContainer(size: termsLabel.bounds.size)
+        let textStorage = NSTextStorage(attributedString: termsLabel.attributedText!)
+        
+        layoutManager.addTextContainer(textContainer)
+        textStorage.addLayoutManager(layoutManager)
+        
+        textContainer.lineFragmentPadding = 0
+        textContainer.maximumNumberOfLines = termsLabel.numberOfLines
+        textContainer.lineBreakMode = termsLabel.lineBreakMode
+        
+        let index = layoutManager.glyphIndex(for: tapLocation, in: textContainer)
+        
+        let termsRange = nsText.range(of: "Terms of Use")
+        let privacyRange = nsText.range(of: "Privacy Policy")
+        
+        if NSLocationInRange(index, termsRange), let url = URLs.terms {
+            let safari = SFSafariViewController(url: url)
+            present(safari, animated: true)
+        } else if NSLocationInRange(index, privacyRange), let url = URLs.privacy {
+            let safari = SFSafariViewController(url: url)
+            present(safari, animated: true)
+        }
+    }
+    
     @objc private func skipTapped() {
         print("Skip tapped")
         
     }
     
+    @objc private func handleAppleIdRequest() {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce) 
+
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+        authorizationController.presentationContextProvider = self
+        authorizationController.performRequests()
+    }
+    func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let charset: [Character] =
+            Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+
+        while remainingLength > 0 {
+            let randoms = (0..<16).map { _ in UInt8.random(in: 0...255) }
+            randoms.forEach { random in
+                if remainingLength == 0 { return }
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+        return result
+    }
+
+    func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
 }
 
+private enum URLs {
+    static let terms = URL(string: "https://google.com/")
+    static let privacy = URL(string: "https://google.com/")
+}
+
+extension LoginViewController: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+            guard let nonce = currentNonce else { fatalError("Invalid state: no login request") }
+            guard let appleIDToken = appleIDCredential.identityToken else { return }
+            guard let idTokenString = String(data: appleIDToken, encoding: .utf8) else { return }
+
+            let credential = OAuthProvider.credential(
+                withProviderID: "apple.com",
+                idToken: idTokenString,
+                rawNonce: nonce
+            )
+
+            Auth.auth().signIn(with: credential) { authResult, error in
+                if let error = error {
+                    print("Error signing in with Apple: \(error.localizedDescription)")
+                    return
+                }
+                print("Signed in as \(authResult?.user.uid ?? "unknown user")")
+            }
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("Sign in with Apple failed: \(error.localizedDescription)")
+    }
+}
+
+extension LoginViewController: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        return self.view.window!
+    }
+}
