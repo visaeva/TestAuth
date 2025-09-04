@@ -1,0 +1,16 @@
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Firebase конфиг и другие plist
+GoogleService-Info.plist
+
+# General macOS
+*.DS_Store
