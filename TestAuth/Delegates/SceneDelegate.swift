@@ -13,14 +13,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        // KeychainHelper.standard.clearAll()
+        
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
         let window = UIWindow(windowScene: windowScene)
-        let loginVC = LoginViewController()
         
-        let navController = UINavigationController(rootViewController: loginVC)
-        
-        window.rootViewController = navController
+        if let token = KeychainHelper.standard.read(service: "court360", account: "idToken"),
+           !token.isEmpty {
+            print("Пользователь авторизован. idToken: \(token.prefix(10))...")
+            window.rootViewController = TabBarController()
+        } else {
+            print("Пользователь не авторизован.")
+            let loginVC = LoginViewController()
+            window.rootViewController = UINavigationController(rootViewController: loginVC)
+        }
         self.window = window
         window.makeKeyAndVisible()
     }

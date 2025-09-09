@@ -38,4 +38,19 @@ final class KeychainHelper {
         else { return nil }
         return string
     }
+    
+    func clearAll() {
+        let secItemClasses = [
+            kSecClassGenericPassword,
+            kSecClassInternetPassword,
+            kSecClassCertificate,
+            kSecClassKey,
+            kSecClassIdentity
+        ]
+        for itemClass in secItemClasses {
+            let query: [String: Any] = [kSecClass as String: itemClass]
+            SecItemDelete(query as CFDictionary)
+        }
+        print("Keychain очищен")
+    }
 }

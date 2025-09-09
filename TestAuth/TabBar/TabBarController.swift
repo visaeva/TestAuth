@@ -12,7 +12,7 @@ class TabBarController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        tabBar.tintColor = .black // цвет для выбранного таба
+        tabBar.tintColor = .black 
                tabBar.unselectedItemTintColor = UIColor(named: "tabColor")
         
         let homeVC = HomeViewController()

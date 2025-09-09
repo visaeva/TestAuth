@@ -142,11 +142,14 @@ class LoginViewController: UIViewController {
     }
     
     private func bindViewModel() {
-        viewModel.onSignInSuccess = { [weak self] in
+        viewModel.onSignInSuccess = {
             DispatchQueue.main.async {
+                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                      let window = windowScene.windows.first else { return }
+                
                 let tabBarVC = TabBarController()
-                tabBarVC.modalPresentationStyle = .fullScreen
-                self?.present(tabBarVC, animated: true)
+                window.rootViewController = tabBarVC
+                window.makeKeyAndVisible()
             }
         }
         

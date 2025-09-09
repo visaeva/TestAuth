@@ -32,62 +32,74 @@ final class LoginViewModel: NSObject {
         controller.performRequests()
     }
     
-    // MARK: - Google Sign In
+    // MARK: - Sign In
     func signInWithGoogle(presentingVC: UIViewController) {
         guard let clientID = FirebaseApp.app()?.options.clientID else { return }
-        
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
         GIDSignIn.sharedInstance.signIn(withPresenting: presentingVC) { [weak self] result, error in
             if let error = error {
+                print("Google sign in failed: \(error.localizedDescription)")
                 self?.onSignInError?("Google sign in failed: \(error.localizedDescription)")
                 return
             }
-            
             guard let user = result?.user,
                   let idToken = user.idToken?.tokenString else {
+                print("Google sign in: missing auth data")
                 self?.onSignInError?("Google sign in: missing auth data")
                 return
             }
+            print("Google user signed in: \(user.profile?.name ?? "No Name")")
+            print("✅ idToken: \(idToken.prefix(10))...")
+            let credential = GoogleAuthProvider.credential(
+                withIDToken: idToken,
+                accessToken: user.accessToken.tokenString
+            )
+            self?.signInToFirebase(with: credential, idToken: idToken)
+        }
+    }
+    
+    private func signInToFirebase(with credential: AuthCredential, idToken: String) {
+        Auth.auth().signIn(with: credential) { [weak self] authResult, error in
+            if let error = error {
+                print("Firebase sign in error: \(error.localizedDescription)")
+                self?.onSignInError?("Firebase sign in error: \(error.localizedDescription)")
+                return
+            }
+            print("✅ Firebase sign in success")
             
-            let credential = GoogleAuthProvider.credential(withIDToken: idToken,
-                                                           accessToken: user.accessToken.tokenString)
-            
-            Auth.auth().signIn(with: credential) { authResult, error in
+            authResult?.user.getIDToken { [weak self] token, error in
                 if let error = error {
-                    self?.onSignInError?("Firebase sign in error: \(error.localizedDescription)")
+                    print("Failed to get idToken: \(error.localizedDescription)")
+                    self?.onSignInError?("Failed to get idToken: \(error.localizedDescription)")
                     return
                 }
-                
-                authResult?.user.getIDToken(completion: { [weak self] idToken, error in
-                    if let error = error {
-                        self?.onSignInError?("Failed to get idToken: \(error.localizedDescription)")
-                        return
-                    }
-                    guard let idToken = idToken else {
-                        self?.onSignInError?("idToken is nil")
-                        return
-                    }
-                    
-                    NetworkManager.shared.sendIdToken(idToken) { result in
-                        DispatchQueue.main.async {
-                            switch result {
-                            case .success(let accessToken):
-                                KeychainHelper.standard.save(accessToken, service: "court360", account: "accessToken")
-                                self?.onSignInSuccess?()
-                            case .failure(let error):
-                                self?.onSignInError?("Network error: \(error.localizedDescription)")
-                            }
-                        }
-                    }
+                guard let token = token else {
+                    print("idToken is nil")
+                    self?.onSignInError?("idToken is nil")
+                    return
                 }
-                )
+                self?.handleSuccessfulSignIn(idToken: token)
             }
         }
     }
     
-    
+    private func handleSuccessfulSignIn(idToken: String) {
+        KeychainHelper.standard.save(idToken, service: "court360", account: "idToken")
+        print("Отправляем idToken: \(idToken.prefix(10))...")
+        onSignInSuccess?()
+        
+        NetworkManager.shared.sendIdToken(idToken) { result in
+            switch result {
+            case .success(let accessToken):
+                print("AccessToken от бэкенда: \(accessToken.prefix(10))...")
+            case .failure(let error):
+                print("Network error: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Helpers
     private func randomNonceString(length: Int = 32) -> String {
         precondition(length > 0)
