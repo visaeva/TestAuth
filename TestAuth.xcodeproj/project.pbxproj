@@ -21,22 +21,9 @@
 		4CBA996F2E708B2E007ACADD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		4C5AD1912E69A460004A8D81 /* Exceptions for "TestAuth" folder in "TestAuth" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 4C5AD17E2E69A45E004A8D81 /* TestAuth */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4C5AD1812E69A45E004A8D81 /* TestAuth */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				4C5AD1912E69A460004A8D81 /* Exceptions for "TestAuth" folder in "TestAuth" target */,
-			);
 			path = TestAuth;
 			sourceTree = "<group>";
 		};
